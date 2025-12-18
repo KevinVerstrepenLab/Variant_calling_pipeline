@@ -1,0 +1,59 @@
+# ==== PATHS ====
+ref: "/data1/u0176926/Variant_Calling/Ref_S288c/S288c_R64-5-1.fasta"
+#fastq_dir: "data/fastq"            # If you don't use samples.tsv
+samples_tsv: "/data1/u0176926/Variant_Calling/raw_data/SACE_strains/sample_SACE.tsv"
+outdir: "/data1/u0176926/Variant_Calling/SACE_strains"
+
+# Optional: known-sites VCFs for BQSR (not used below; add if you want BQSR)
+known_sites: []
+
+# ==== RESOURCES (tune for your cluster) ====
+trimmomatic_threads: 8
+bwa_threads: 12
+markdup_threads: 8
+hc_threads: 8
+
+# ==== FASTP  ====
+fastp_mem_mb: 4000
+fastp_min_len: 36
+fastp_cut_front: true
+fastp_cut_tail: true
+fastp_cut_mean_quality: 15
+
+bwa_mem_mb: 12000
+markdup_mem_mb: 16000
+hc_mem_mb: 16000
+
+# ==== HaplotypeCaller  ====
+gatk:
+  sample_ploidy: 2    # set to 2 for diploid, etc.
+  min_base_qual: 20
+  dont_use_soft_clipped: true
+
+# ==== calling parameter  ====
+call_bam:
+  require_proper_pair: true
+  exclude_flags: 3844   # keeps only primary, mapped, non-duplicate, non-QCfail reads and drops supplementary alignments.
+  mapq: 30
+
+# where to store joint outputs
+joint:
+  chunk_size: null     # e.g., 1000000 for 1 Mb chunks; null = per contig
+  reader_threads: 4
+  tmp_dir: /tmp
+
+filters:
+  snp: 'QD < 5.0 || FS > 30.0 || MQ < 50.00 || MQRankSum < -8 || ReadPosRankSum < -5.0 || SOR > 2.0'
+  indel: 'QD < 5.0 || FS > 200.0 || ReadPosRankSum < -10.0 || SOR > 10.0'
+
+ad_filter:
+  enabled: false
+  min_dp: 5
+  ambig_low: 0.1
+  ambig_high: 0.9
+  split_multiallelic: false   # NEW: split sites to biallelic before AD masking
+  drop_hets: false            # NEW: set all het genotypes to missing (recommended for haploid)
+
+final:
+  sample_max_missing: 0.2   # per-sample missingness cutoff for removal (Step 3)
+  max_missing: 0.5          # per-site missingness cutoff to keep sites (Step 4)

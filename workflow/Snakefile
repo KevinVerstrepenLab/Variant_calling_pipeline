@@ -1,0 +1,185 @@
+from pathlib import Path
+import os, csv, re, gzip
+from snakemake.exceptions import WorkflowError
+
+# --- Repo-aware paths ---
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOW = Path(__file__).resolve().parent
+ENVS = "/data1/u0176926/snakemake/Variant_calling/workflow/envs"  # absolute envs dir
+CONFIG = ROOT / "config" / "config.yaml"
+configfile: str(CONFIG)
+
+# --- Config values ---
+REF = config["ref"]
+OUT = config["outdir"]
+LOGS = f"{OUT}/logs"
+FINAL = f"{OUT}/final"
+
+# --- Derived reference paths (must come AFTER REF is set) ---
+p = Path(REF).resolve()
+if not p.exists():
+    raise WorkflowError(f"Reference FASTA not found: {p}")
+REF_DICT = (p.parent / (p.stem + ".dict")).as_posix()  # where we expect the .dict to be
+REF_FAI  = (str(p) + ".fai")                            # standard FASTA index path
+
+# --- Helpers for intervals ---
+def sanitize(x: str) -> str:
+    # allow only letters, digits, dot, underscore, dash
+    return re.sub(r"[^A-Za-z0-9._-]", "_", x)
+
+def _load_contigs_from_dict(dict_path):
+    contigs = []
+    with open(dict_path) as fh:
+        for line in fh:
+            if line.startswith("@SQ"):
+                parts = dict(x.split(":", 1) for x in line.strip().split("\t")[1:])
+                contigs.append((parts["SN"], int(parts["LN"])))
+    return contigs
+
+def _load_contigs_from_fai(fai_path):
+    contigs = []
+    with open(fai_path) as fh:
+        for line in fh:
+            toks = line.rstrip("\n").split("\t")
+            if not toks:
+                continue
+            contigs.append((toks[0], int(toks[1])))
+    return contigs
+
+def _scan_fasta_lengths(fa_path):
+    """Last-resort reader (supports .gz)."""
+    contigs = []
+    opener = gzip.open if str(fa_path).endswith(".gz") else open
+    name, length = None, 0
+    with opener(fa_path, "rt") as fh:
+        for line in fh:
+            if line.startswith(">"):
+                if name is not None:
+                    contigs.append((name, length))
+                name = line[1:].split()[0]
+                length = 0
+            else:
+                length += len(line.strip())
+    if name is not None:
+        contigs.append((name, length))
+    if not contigs:
+        raise WorkflowError(
+            f"Failed to derive contigs from FASTA: {fa_path}. "
+            "Create a .dict or .fai first (snakemake ref_dict ref_fai)."
+        )
+    return contigs
+
+# --- Build sanitized chunk tags mapping to ORIGINAL intervals ---
+# Prefer .dict, else .fai, else scan FASTA.
+if Path(REF_DICT).exists():
+    contigs = _load_contigs_from_dict(REF_DICT)
+elif Path(REF_FAI).exists():
+    contigs = _load_contigs_from_fai(REF_FAI)
+else:
+    contigs = _scan_fasta_lengths(p)
+
+chunk_size_cfg = config.get("joint", {}).get("chunk_size", None)
+chunk_size = int(chunk_size_cfg) if chunk_size_cfg else 0
+
+INTERVAL_BY_TAG = {}
+for sn, ln in contigs:
+    if chunk_size > 0:
+        start = 1
+        while start <= ln:
+            end = min(start + chunk_size - 1, ln)
+            tag = f"{sanitize(sn)}_{start}_{end}"        # sanitized tag for filenames/dirs
+            INTERVAL_BY_TAG[tag] = f"{sn}:{start}-{end}" # ORIGINAL contig string for -L
+            start = end + 1
+    else:
+        tag = f"{sanitize(sn)}_1_{ln}"
+        INTERVAL_BY_TAG[tag] = f"{sn}:1-{ln}"
+
+# Preserve input order (Py3.7+ dicts preserve insertion order)
+CHUNKS = list(INTERVAL_BY_TAG.keys())
+
+# --- Sample discovery ---
+def _expanduser(pth):
+    return Path(os.path.expanduser(str(pth))).resolve()
+
+samples_tsv_cfg = config.get("samples_tsv", None)
+candidates = []
+if samples_tsv_cfg:
+    candidates.append(_expanduser(samples_tsv_cfg))
+candidates += [
+    _expanduser(ROOT / "config" / "samples.tsv"),
+    _expanduser(ROOT / "samples.tsv"),
+]
+
+SAMPLES_TSV = next((pp for pp in candidates if pp.is_file()), None)
+
+SAMPLES, PAIRS = [], {}
+if SAMPLES_TSV:
+    with SAMPLES_TSV.open() as f:
+        rdr = csv.DictReader(f, delimiter="\t")
+        required = {"sample", "R1", "R2"}
+        if not required.issubset(set(rdr.fieldnames or [])):
+            raise WorkflowError(
+                f"samples.tsv at {SAMPLES_TSV} must have headers: sample, R1, R2 "
+                f"(tab-delimited). Found: {rdr.fieldnames}"
+            )
+        for row in rdr:
+            s = row["sample"].strip()
+            r1 = row["R1"].strip()
+            r2 = row["R2"].strip()
+            if s and r1 and r2:
+                SAMPLES.append(s)
+                PAIRS[s] = (r1, r2)
+    if not SAMPLES:
+        raise WorkflowError(f"No rows found in samples.tsv at {SAMPLES_TSV}.")
+else:
+    fqdir_str = config.get("fastq_dir", "")
+    fqdir = _expanduser(fqdir_str) if fqdir_str else None
+    if not fqdir or not fqdir.exists():
+        checked = ", ".join(str(p) for p in candidates)
+        raise WorkflowError(
+            "No valid samples.tsv found and fastq_dir missing/invalid.\n"
+            f"Checked: {checked}\n"
+            "Add 'samples_tsv: config/samples.tsv' to config.yaml, or set 'fastq_dir'."
+        )
+    for r1 in sorted(fqdir.glob("*_R1.fastq.gz")):
+        s = r1.name.replace("_R1.fastq.gz", "")
+        r2 = fqdir / f"{s}_R2.fastq.gz"
+        if r2.exists():
+            SAMPLES.append(s)
+            PAIRS[s] = (str(r1), str(r2))
+    if not SAMPLES:
+        raise WorkflowError(f"No pairs found in {fqdir} (need *_R1.fastq.gz and *_R2.fastq.gz).")
+SAMPLES = sorted(SAMPLES)
+
+# --- Output dirs ---
+TRIM = f"{OUT}/trimmed"
+BAM  = f"{OUT}/bam"
+GVCF = f"{OUT}/gvcf"
+
+# --- Joint genotyping dirs ---
+GENOMICSDB = f"{OUT}/genomicsdb"
+JOINT      = f"{OUT}/joint"
+SNPS_DIR   = f"{OUT}/snps"
+INDELS_DIR = f"{OUT}/indels"
+TMP_DIR    = config.get("joint", {}).get("tmp_dir", "/tmp")
+
+# --- Include rules AFTER all variables above are defined ---
+include: "rules/ref.smk"
+include: "rules/fastp.smk"
+include: "rules/bwa_mem_sort.smk"
+include: "rules/mark_duplicates.smk"
+include: "rules/call_bam.smk"
+include: "rules/haplotype_caller.smk"
+include: "rules/tabix_index.smk"
+include: "rules/sample_map.smk"
+include: "rules/genomicsdb.smk"
+include: "rules/genotype.smk"
+include: "rules/select_filter.smk"
+include: "rules/merge.smk"
+include: "rules/final.smk"
+
+rule all:
+    input:
+        expand(f"{GVCF}/{{sample}}.g.vcf.gz.tbi", sample=SAMPLES),
+        f"{FINAL}/filtered_snps.final.vcf.gz.tbi",
+        f"{FINAL}/filtered_indels.final.vcf.gz.tbi"

@@ -1,0 +1,7 @@
+sample	R1	R2
+control1	/data1/u0176926/Govers_lab/fastq/control_1/1.Cleandata/control_1.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/control_1/1.Cleandata/control_1.IS350_Clean.2.fq.gz
+control2	/data1/u0176926/Govers_lab/fastq/control_2/1.Cleandata/control_2.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/control_2/1.Cleandata/control_2.IS350_Clean.2.fq.gz
+treat_1l1	/data1/u0176926/Govers_lab/fastq/treat_1_l_1/1.Cleandata/treat_1_l_1.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/treat_1_l_1/1.Cleandata/treat_1_l_1.IS350_Clean.2.fq.gz
+treat_1l2	/data1/u0176926/Govers_lab/fastq/treat_1_l_2/1.Cleandata/treat_1_l_2.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/treat_1_l_2/1.Cleandata/treat_1_l_2.IS350_Clean.2.fq.gz
+treat_2l1	/data1/u0176926/Govers_lab/fastq/treat_2_l_1/1.Cleandata/treat_2_l_1.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/treat_2_l_1/1.Cleandata/treat_2_l_1.IS350_Clean.2.fq.gz
+treat_2l2	/data1/u0176926/Govers_lab/fastq/treat_2_l_2/1.Cleandata/treat_2_l_2.IS350_Clean.1.fq.gz	/data1/u0176926/Govers_lab/fastq/treat_2_l_2/1.Cleandata/treat_2_l_2.IS350_Clean.2.fq.gz
