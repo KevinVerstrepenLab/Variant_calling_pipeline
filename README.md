@@ -20,12 +20,15 @@ It is designed for reproducible variant calling of multiple samples on an HPC cl
 - cmd.unix — optional cluster command example
 
 ## Sample Sheet Format
-sample<TAB>R1<TAB>R2  
-S1   S1_R1.fq.gz   S1_R2.fq.gz
+sample  fq1  fq2  
+Sample1  Sample1_R1.fq.gz    Sample1_R2.fq.gz
+Sample2  Sample2_R1.fq.gz    Sample2_R2.fq.gz
 
 ## Running the Pipeline
 ```
-snakemake --use-conda --cores 56 --printshellcmds --latency-wait 30           --keep-going --rerun-incomplete           --configfile config/config.yaml
+snakemake --use-conda --cores 32 \
+--printshellcmds --latency-wait 30 \
+--keep-going --rerun-incomplete --configfile config/config.yaml
 ```
 
 ## Outputs
