@@ -45,4 +45,4 @@ snakemake --use-conda --cores 32 \
 
 ## Maintainer
 Verstrepen Lab — KU Leuven
-michael.abrouk@kuleuven.be
+<michael.abrouk@kuleuven.be>
