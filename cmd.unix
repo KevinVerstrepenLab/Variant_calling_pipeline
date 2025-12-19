@@ -1,5 +1,0 @@
-for i in $(ls *.sorted.bam); do echo "flagstat $i"; out=${i/.sorted.bam/.flagstat}; samtools flagstat -@ 12 $i >$out; done
-
-bcftools query -HH -f '%CHROM\t%POS\t%REF\t%ALT[\t%GT\t%AD]\n' filtered_snps.final.vcf.gz
-bcftools +counts filtered_snps.final.vcf.gz
-
