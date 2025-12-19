@@ -1,6 +1,6 @@
 # Variant Calling Pipeline (Snakemake)
 
-This repository contains a Snakemake workflow for **FASTQ → trimmed FASTQ → BAM → GVCF → joint genotyping → filtered VCFs** using **fastp**, **BWA‑MEM2**, **GATK4**, and optional downstream filtering.  
+This repository contains a Snakemake workflow for **FASTQ → trimmed FASTQ → BAM → GVCF → joint genotyping → filtered VCFs** using **fastp**, **BWA‑MEM**, **GATK4**, and optional downstream filtering.  
 It is designed for reproducible variant calling of multiple samples on an HPC cluster or workstation.
 
 ---
@@ -10,7 +10,7 @@ It is designed for reproducible variant calling of multiple samples on an HPC cl
 1. **FASTQ trimming with fastp**  
    Removes low‑quality bases, adapters, and produces QC reports.
 
-2. **Alignment to reference genome using BWA‑MEM2**  
+2. **Alignment to reference genome using BWA‑MEM**  
    Produces sorted BAM files.
 
 3. **Marking duplicates**  
@@ -40,7 +40,7 @@ You can paste this directly into your README on GitHub:
 ```mermaid
 flowchart TD
     A[Raw FASTQ] --> B[fastp<br/>Trimmed FASTQ]
-    B --> C[BWA-MEM2<br/>Alignment]
+    B --> C[BWA-MEM<br/>Alignment]
     C --> D[Sort + MarkDuplicates]
     D --> E[HaplotypeCaller<br/>GVCF per sample]
     E --> F[GenomicsDBImport]
@@ -117,7 +117,10 @@ final:
 ##  Running the Pipeline
 
 ```
-snakemake --use-conda --cores 32   --printshellcmds --latency-wait 30   --keep-going --rerun-incomplete   --configfile config/config.yaml
+snakemake --use-conda --cores 32 \
+    --printshellcmds --latency-wait 30  \
+    --keep-going --rerun-incomplete \
+    --configfile config/config.yaml
 ```
 
 ---
