@@ -152,7 +152,7 @@ snakemake --use-conda --cores 32 \
 
 ---
 
-## 👥 Maintainer
+##  Maintainer
 
 Verstrepen Lab — KU Leuven  
 https://verstrepenlab.sites.vib.be/en  
