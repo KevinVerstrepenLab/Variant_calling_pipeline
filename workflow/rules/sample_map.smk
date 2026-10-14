@@ -1,57 +1,20 @@
-# Build a GATK sample map: "<sample>\t<path_to_gvcf>"
+# Build a GATK sample map from current samples and complete reusable GVCFs.
 from pathlib import Path
-
 
 GVCF_SUFFIX = ".g.vcf.gz"
 
 
-def sample_from_gvcf(path):
-    name = Path(path).name
-    if not name.endswith(GVCF_SUFFIX):
-        raise ValueError(f"Unexpected GVCF filename: {path}")
-    return name[:-len(GVCF_SUFFIX)]
-
-
-def discovered_gvcf_samples():
-    """
-    Include:
-      1. samples from the current run, i.e. SAMPLES
-      2. any existing *.g.vcf.gz files already present in GVCF
-    """
-    existing = [
-        sample_from_gvcf(p)
-        for p in Path(GVCF).glob(f"*{GVCF_SUFFIX}")
-    ]
-
-    return sorted(set(SAMPLES).union(existing))
-
-
-def all_gvcfs(wildcards=None):
-    return [
-        f"{GVCF}/{sample}{GVCF_SUFFIX}"
-        for sample in discovered_gvcf_samples()
-    ]
-
-
-def all_gvcf_indexes(wildcards=None):
-    return [
-        f"{gvcf}.tbi"
-        for gvcf in all_gvcfs()
-    ]
-
 
 rule make_sample_map:
     input:
-        gvcfs=all_gvcfs,
-        idxs=all_gvcf_indexes
+        gvcfs=[GVCF_PATHS[sample] for sample in GVCF_SAMPLES],
+        idxs=[GVCF_INDEXES[sample] for sample in GVCF_SAMPLES],
+        manifest=rules.gvcf_provenance.output.manifest,
+        reference_sha256=rules.reference_fingerprint.output.sha256
     output:
         map=f"{JOINT}/samples.map"
-    run:
-        import os
-
-        os.makedirs(JOINT, exist_ok=True)
-
-        with open(output.map, "w") as fh:
-            for gvcf in sorted(input.gvcfs):
-                sample = sample_from_gvcf(gvcf)
-                fh.write(f"{sample}\t{gvcf}\n")
+    log:
+        f"{LOGS}/joint/sample_map.log"
+    conda: str(ENVS / "gatk.yaml")
+    script:
+        "../scripts/make_sample_map.py"

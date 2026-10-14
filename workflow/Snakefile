@@ -1,76 +1,36 @@
 from pathlib import Path
-import os, csv, re, gzip
+import os
+import csv
+import json
+import re
+from common import sanitize, _load_contigs_from_dict, _load_contigs_from_fai, _scan_fasta_lengths, _expanduser
 from snakemake.exceptions import WorkflowError
 
-# --- Repo-aware paths ---
-ROOT = Path(__file__).resolve().parent.parent
-WORKFLOW = Path(__file__).resolve().parent
-ENVS = "/data1/u0176926/snakemake/Variant_calling/workflow/envs"  # absolute envs dir
-CONFIG = ROOT / "config" / "config.yaml"
-configfile: str(CONFIG)
+# --- Repository-aware paths ---
+WORKFLOW = Path(workflow.basedir).resolve()
+ROOT = WORKFLOW.parent
+ENVS = WORKFLOW / "envs"
+
+# A command-line --configfile overrides this default.
+DEFAULT_CONFIG = ROOT / "config" / "config.yaml"
+configfile: str(DEFAULT_CONFIG)
 
 # --- Config values ---
-REF = config["ref"]
-OUT = config["outdir"]
+REF = str(Path(os.path.expanduser(config["ref"])).resolve())
+OUT = str(Path(os.path.expanduser(config["outdir"])).resolve())
 LOGS = f"{OUT}/logs"
 FINAL = f"{OUT}/final"
 
-# --- Derived reference paths (must come AFTER REF is set) ---
-p = Path(REF).resolve()
+# --- Derived reference paths ---
+p = Path(REF)
 if not p.exists():
     raise WorkflowError(f"Reference FASTA not found: {p}")
-REF_DICT = (p.parent / (p.stem + ".dict")).as_posix()  # where we expect the .dict to be
-REF_FAI  = (str(p) + ".fai")                            # standard FASTA index path
+REF_DICT = (p.parent / f"{p.stem}.dict").as_posix()
+REF_FAI = f"{p}.fai"
 
 # --- Helpers for intervals ---
-def sanitize(x: str) -> str:
-    # allow only letters, digits, dot, underscore, dash
-    return re.sub(r"[^A-Za-z0-9._-]", "_", x)
 
-def _load_contigs_from_dict(dict_path):
-    contigs = []
-    with open(dict_path) as fh:
-        for line in fh:
-            if line.startswith("@SQ"):
-                parts = dict(x.split(":", 1) for x in line.strip().split("\t")[1:])
-                contigs.append((parts["SN"], int(parts["LN"])))
-    return contigs
 
-def _load_contigs_from_fai(fai_path):
-    contigs = []
-    with open(fai_path) as fh:
-        for line in fh:
-            toks = line.rstrip("\n").split("\t")
-            if not toks:
-                continue
-            contigs.append((toks[0], int(toks[1])))
-    return contigs
-
-def _scan_fasta_lengths(fa_path):
-    """Last-resort reader (supports .gz)."""
-    contigs = []
-    opener = gzip.open if str(fa_path).endswith(".gz") else open
-    name, length = None, 0
-    with opener(fa_path, "rt") as fh:
-        for line in fh:
-            if line.startswith(">"):
-                if name is not None:
-                    contigs.append((name, length))
-                name = line[1:].split()[0]
-                length = 0
-            else:
-                length += len(line.strip())
-    if name is not None:
-        contigs.append((name, length))
-    if not contigs:
-        raise WorkflowError(
-            f"Failed to derive contigs from FASTA: {fa_path}. "
-            "Create a .dict or .fai first (snakemake ref_dict ref_fai)."
-        )
-    return contigs
-
-# --- Build sanitized chunk tags mapping to ORIGINAL intervals ---
-# Prefer .dict, else .fai, else scan FASTA.
 if Path(REF_DICT).exists():
     contigs = _load_contigs_from_dict(REF_DICT)
 elif Path(REF_FAI).exists():
@@ -78,92 +38,166 @@ elif Path(REF_FAI).exists():
 else:
     contigs = _scan_fasta_lengths(p)
 
-chunk_size_cfg = config.get("joint", {}).get("chunk_size", None)
+chunk_size_cfg = config.get("joint", {}).get("chunk_size")
 chunk_size = int(chunk_size_cfg) if chunk_size_cfg else 0
-
 INTERVAL_BY_TAG = {}
-for sn, ln in contigs:
+for sequence_name, sequence_length in contigs:
     if chunk_size > 0:
         start = 1
-        while start <= ln:
-            end = min(start + chunk_size - 1, ln)
-            tag = f"{sanitize(sn)}_{start}_{end}"        # sanitized tag for filenames/dirs
-            INTERVAL_BY_TAG[tag] = f"{sn}:{start}-{end}" # ORIGINAL contig string for -L
+        while start <= sequence_length:
+            end = min(start + chunk_size - 1, sequence_length)
+            tag = f"{sanitize(sequence_name)}_{start}_{end}"
+            INTERVAL_BY_TAG[tag] = f"{sequence_name}:{start}-{end}"
             start = end + 1
     else:
-        tag = f"{sanitize(sn)}_1_{ln}"
-        INTERVAL_BY_TAG[tag] = f"{sn}:1-{ln}"
+        tag = f"{sanitize(sequence_name)}_1_{sequence_length}"
+        INTERVAL_BY_TAG[tag] = f"{sequence_name}:1-{sequence_length}"
+CHUNKS = list(INTERVAL_BY_TAG)
 
-# Preserve input order (Py3.7+ dicts preserve insertion order)
-CHUNKS = list(INTERVAL_BY_TAG.keys())
+# --- Sample discovery: paired and single-end may be mixed in one sheet ---
 
-# --- Sample discovery ---
-def _expanduser(pth):
-    return Path(os.path.expanduser(str(pth))).resolve()
-
-samples_tsv_cfg = config.get("samples_tsv", None)
+samples_tsv_cfg = config.get("samples_tsv")
 candidates = []
 if samples_tsv_cfg:
     candidates.append(_expanduser(samples_tsv_cfg))
-candidates += [
+candidates.extend([
     _expanduser(ROOT / "config" / "samples.tsv"),
     _expanduser(ROOT / "samples.tsv"),
-]
+])
+SAMPLES_TSV = next((candidate for candidate in candidates if candidate.is_file()), None)
 
-SAMPLES_TSV = next((pp for pp in candidates if pp.is_file()), None)
+SAMPLES = []
+READS = {}
+LAYOUT = {}
 
-SAMPLES, PAIRS = [], {}
 if SAMPLES_TSV:
-    with SAMPLES_TSV.open() as f:
-        rdr = csv.DictReader(f, delimiter="\t")
-        required = {"sample", "R1", "R2"}
-        if not required.issubset(set(rdr.fieldnames or [])):
+    with SAMPLES_TSV.open() as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        headers = set(reader.fieldnames or [])
+        required = {"sample", "R1"}
+        if not required.issubset(headers):
             raise WorkflowError(
-                f"samples.tsv at {SAMPLES_TSV} must have headers: sample, R1, R2 "
-                f"(tab-delimited). Found: {rdr.fieldnames}"
+                f"{SAMPLES_TSV} must have tab-delimited headers sample and R1; "
+                f"optional headers are layout and R2. Found: {reader.fieldnames}"
             )
-        for row in rdr:
-            s = row["sample"].strip()
-            r1 = row["R1"].strip()
-            r2 = row["R2"].strip()
-            if s and r1 and r2:
-                SAMPLES.append(s)
-                PAIRS[s] = (r1, r2)
-    if not SAMPLES:
-        raise WorkflowError(f"No rows found in samples.tsv at {SAMPLES_TSV}.")
+        for line_number, row in enumerate(reader, start=2):
+            sample = (row.get("sample") or "").strip()
+            r1 = (row.get("R1") or "").strip()
+            r2 = (row.get("R2") or "").strip()
+            layout = (row.get("layout") or ("paired" if r2 else "single")).strip().lower()
+            if layout in {"pe", "paired-end", "paired_end"}:
+                layout = "paired"
+            elif layout in {"se", "single-end", "single_end"}:
+                layout = "single"
+            if not sample or not r1:
+                raise WorkflowError(f"Missing sample or R1 at line {line_number} of {SAMPLES_TSV}")
+            if sample in READS:
+                raise WorkflowError(f"Duplicate sample name {sample!r} in {SAMPLES_TSV}")
+            if layout not in {"paired", "single"}:
+                raise WorkflowError(f"Invalid layout {layout!r} for sample {sample!r}")
+            if layout == "paired" and not r2:
+                raise WorkflowError(f"Paired sample {sample!r} has no R2 at line {line_number}")
+            SAMPLES.append(sample)
+            LAYOUT[sample] = layout
+            READS[sample] = {"R1": r1, "R2": r2 if layout == "paired" else None}
 else:
-    fqdir_str = config.get("fastq_dir", "")
-    fqdir = _expanduser(fqdir_str) if fqdir_str else None
-    if not fqdir or not fqdir.exists():
-        checked = ", ".join(str(p) for p in candidates)
+    fastq_dir_value = config.get("fastq_dir", "")
+    fastq_dir = _expanduser(fastq_dir_value) if fastq_dir_value else None
+    if not fastq_dir or not fastq_dir.exists():
+        checked = ", ".join(str(candidate) for candidate in candidates)
         raise WorkflowError(
-            "No valid samples.tsv found and fastq_dir missing/invalid.\n"
-            f"Checked: {checked}\n"
-            "Add 'samples_tsv: config/samples.tsv' to config.yaml, or set 'fastq_dir'."
+            "No valid samples.tsv and fastq_dir is missing or invalid. "
+            f"Checked: {checked}"
         )
-    for r1 in sorted(fqdir.glob("*_R1.fastq.gz")):
-        s = r1.name.replace("_R1.fastq.gz", "")
-        r2 = fqdir / f"{s}_R2.fastq.gz"
-        if r2.exists():
-            SAMPLES.append(s)
-            PAIRS[s] = (str(r1), str(r2))
-    if not SAMPLES:
-        raise WorkflowError(f"No pairs found in {fqdir} (need *_R1.fastq.gz and *_R2.fastq.gz).")
+    default_layout = str(config.get("read_layout", "paired")).lower()
+    if default_layout == "paired":
+        for r1 in sorted(fastq_dir.glob("*_R1.fastq.gz")):
+            sample = r1.name.removesuffix("_R1.fastq.gz")
+            r2 = fastq_dir / f"{sample}_R2.fastq.gz"
+            if not r2.exists():
+                raise WorkflowError(f"Missing R2 for paired sample {sample}: {r2}")
+            SAMPLES.append(sample)
+            LAYOUT[sample] = "paired"
+            READS[sample] = {"R1": str(r1), "R2": str(r2)}
+    elif default_layout == "single":
+        pattern = config.get("single_end_pattern", "*.fastq.gz")
+        for r1 in sorted(fastq_dir.glob(pattern)):
+            sample = r1.name
+            for suffix in (".fastq.gz", ".fq.gz", ".fastq", ".fq"):
+                if sample.endswith(suffix):
+                    sample = sample.removesuffix(suffix)
+                    break
+            SAMPLES.append(sample)
+            LAYOUT[sample] = "single"
+            READS[sample] = {"R1": str(r1), "R2": None}
+    else:
+        raise WorkflowError("read_layout must be paired or single when using fastq_dir")
+
+if not SAMPLES:
+    raise WorkflowError("No samples were discovered")
 SAMPLES = sorted(SAMPLES)
+PAIRED_SAMPLES = [sample for sample in SAMPLES if LAYOUT[sample] == "paired"]
+SINGLE_SAMPLES = [sample for sample in SAMPLES if LAYOUT[sample] == "single"]
 
-# --- Output dirs ---
+# --- Output directories ---
 TRIM = f"{OUT}/trimmed"
-BAM  = f"{OUT}/bam"
+BAM = f"{OUT}/bam"
 GVCF = f"{OUT}/gvcf"
-
-# --- Joint genotyping dirs ---
 GENOMICSDB = f"{OUT}/genomicsdb"
-JOINT      = f"{OUT}/joint"
-SNPS_DIR   = f"{OUT}/snps"
+JOINT = f"{OUT}/joint"
+SNPS_DIR = f"{OUT}/snps"
 INDELS_DIR = f"{OUT}/indels"
-TMP_DIR    = config.get("joint", {}).get("tmp_dir", "/tmp")
+TMP_DIR = config.get("joint", {}).get("tmp_dir", str(ROOT / "tmp"))
 
-# --- Include rules AFTER all variables above are defined ---
+
+# Existing compressed or uncompressed GVCFs are external inputs.
+reuse_config = config.get("gvcf_reuse", {})
+existing_gvcfs = {}
+if reuse_config.get("enabled", True):
+    for path in Path(GVCF).iterdir() if Path(GVCF).is_dir() else []:
+        if not path.is_file():
+            continue
+        sample = None
+        for suffix in (".snps.indels.g.vcf.gz", ".snps.indels.g.vcf", ".g.vcf.gz", ".g.vcf"):
+            if path.name.endswith(suffix):
+                sample = path.name.removesuffix(suffix)
+                break
+        if sample is None:
+            continue
+        if sample in existing_gvcfs:
+            raise WorkflowError(f"Multiple GVCFs for sample {sample}: {existing_gvcfs[sample]}, {path}")
+        existing_gvcfs[sample] = path
+GVCF_SAMPLES = sorted(set(SAMPLES).union(existing_gvcfs)) if reuse_config.get(
+    "include_existing_samples", False
+) else SAMPLES
+REUSED_SAMPLES = set(GVCF_SAMPLES).intersection(existing_gvcfs)
+for sample in REUSED_SAMPLES:
+    if existing_gvcfs[sample].stat().st_size == 0:
+        raise WorkflowError(f"Refusing empty existing GVCF: {existing_gvcfs[sample]}")
+CALL_SAMPLES = [sample for sample in SAMPLES if sample not in REUSED_SAMPLES]
+GVCF_PATHS = {
+    sample: str(existing_gvcfs[sample]) if sample in REUSED_SAMPLES
+    else f"{GVCF}/{sample}.g.vcf.gz"
+    for sample in GVCF_SAMPLES
+}
+GVCF_INDEXES = {
+    sample: path + (".tbi" if path.endswith(".gz") else ".idx")
+    for sample, path in GVCF_PATHS.items()
+}
+PROVENANCE = f"{OUT}/provenance/gvcf"
+PREVIOUS_GVCF_METADATA = {}
+for sample in REUSED_SAMPLES:
+    candidates = [Path(f"{PROVENANCE}/{sample}.meta.json"),
+                  Path(f"{existing_gvcfs[sample]}.meta.json")]
+    metadata_path = next((path for path in candidates if path.is_file()), None)
+    if metadata_path:
+        metadata = json.loads(metadata_path.read_text())
+        PREVIOUS_GVCF_METADATA[sample] = {
+            key: metadata.get(key)
+            for key in ("sample", "reference_sha256", "gvcf_sha256")
+        }
+
+
 include: "rules/ref.smk"
 include: "rules/fastp.smk"
 include: "rules/bwa_mem_sort.smk"
@@ -171,6 +205,7 @@ include: "rules/mark_duplicates.smk"
 include: "rules/call_bam.smk"
 include: "rules/haplotype_caller.smk"
 include: "rules/tabix_index.smk"
+include: "rules/provenance.smk"
 include: "rules/sample_map.smk"
 include: "rules/genomicsdb.smk"
 include: "rules/genotype.smk"
@@ -180,6 +215,7 @@ include: "rules/final.smk"
 
 rule all:
     input:
-        expand(f"{GVCF}/{{sample}}.g.vcf.gz.tbi", sample=SAMPLES),
+        [GVCF_INDEXES[sample] for sample in GVCF_SAMPLES],
+        rules.gvcf_provenance.output.manifest,
         f"{FINAL}/filtered_snps.final.vcf.gz.tbi",
         f"{FINAL}/filtered_indels.final.vcf.gz.tbi"

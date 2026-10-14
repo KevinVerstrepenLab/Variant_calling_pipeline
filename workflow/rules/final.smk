@@ -1,18 +1,7 @@
+from common import ad_expr
+
 # Final SNP/INDEL filtering with AD-masking, sample/site missingness.
 # Requires variables from Snakefile: ENVS, LOGS, FINAL, SNPS_DIR, INDELS_DIR.
-
-def _ad_expr():
-    ad = config.get("ad_filter", {})
-    min_dp = int(ad.get("min_dp", 5))
-    lo = float(ad.get("ambig_low", 0.1))
-    hi = float(ad.get("ambig_high", 0.9))
-    # For biallelic records: mask if DP < min_dp OR ALT fraction in (lo, hi)
-    return (
-        f'FMT/DP<{min_dp} || '
-        f'((FMT/AD[0]+FMT/AD[1])>0 && '
-        f'(FMT/AD[1])/(FMT/AD[0]+FMT/AD[1])>{lo} && '
-        f'(FMT/AD[1])/(FMT/AD[0]+FMT/AD[1])<{hi})'
-    )
 
 # ---------------- SNPs ----------------
 rule final_filter_snps:
@@ -29,12 +18,14 @@ rule final_filter_snps:
         removes = temp(f"{FINAL}/snps.remove_samples.txt"),
         vcf = f"{FINAL}/filtered_snps.final.vcf.gz",
         tbi = f"{FINAL}/filtered_snps.final.vcf.gz.tbi"
-    conda: f"{ENVS}/vcfops.yaml"
+    conda: str(ENVS / "vcfops.yaml")
     threads: 4
     log: f"{LOGS}/final/snps.log"
     params:
+        final_dir=lambda w, output: str(Path(output[0]).parent),
+        logs_dir=lambda w: LOGS,
         do_ad = "true" if config.get("ad_filter", {}).get("enabled", True) else "false",
-        ad_expr = _ad_expr(),
+        ad_expr = ad_expr(config),
         split_bi = "true" if config.get("ad_filter", {}).get("split_multiallelic", True) else "false",
         drop_hets = "true" if config.get("ad_filter", {}).get("drop_hets", True) else "false",
         sample_max_missing = float(config.get("final", {}).get("sample_max_missing", 0.2)),
@@ -42,7 +33,7 @@ rule final_filter_snps:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {FINAL} {LOGS}/final
+        mkdir -p {params.final_dir} {params.logs_dir}/final
 
         # help bcftools find plugins in conda envs
         export BCFTOOLS_PLUGINS="$(dirname $(dirname $(which bcftools)))/libexec/bcftools"
@@ -71,32 +62,26 @@ rule final_filter_snps:
         fi
 
         if [ "{params.do_ad}" = "true" ]; then
-          if ! bcftools +setGT "$SRC1" -Oz -o {output.advcf} -- -n . -i '{params.ad_expr}' 2>> {log}; then
-            echo "[WARN] +setGT (AD mask) failed; skipping AD-clean." >> {log}
-            cp "$SRC1" {output.advcf}
-          fi
+          bcftools +setGT "$SRC1" -Oz -o {output.advcf} -- -t q -n . -i '{params.ad_expr}' 2>> {log}
         else
           cp "$SRC1" {output.advcf}
         fi
 
         # Optionally drop all heterozygous GTs (useful for haploid data)
         if [ "{params.drop_hets}" = "true" ]; then
-          if ! bcftools +setGT {output.advcf} -Oz -o {output.advcf}.tmp -- -n . -i 'GT="het"' 2>> {log}; then
-            echo "[WARN] +setGT (drop hets) failed; keeping previous genotypes." >> {log}
-          else
-            mv {output.advcf}.tmp {output.advcf}
-          fi
+          bcftools +setGT {output.advcf} -Oz -o {output.advcf}.tmp -- -t q -n . -i 'GT="het"' 2>> {log}
+          mv {output.advcf}.tmp {output.advcf}
         fi
 
         tabix -p vcf {output.advcf} 2>> {log}
         SRC="{output.advcf}"
 
         # Step 3: remove samples with > sample_max_missing missingness
-        bcftools query -l "$SRC" > {FINAL}/snps.samples.list 2>> {log}
-        ns=$(wc -l < {FINAL}/snps.samples.list)
-        vcftools --gzvcf "$SRC" --missing-indv --out {FINAL}/snps 2>> {log}
+        bcftools query -l "$SRC" > {params.final_dir}/snps.samples.list 2>> {log}
+        ns=$(wc -l < {params.final_dir}/snps.samples.list)
+        vcftools --gzvcf "$SRC" --missing-indv --out {params.final_dir}/snps 2>> {log}
         LC_NUMERIC=C awk -v thr="{params.sample_max_missing}" 'NR>1 && $5>thr {{print $1}}' \
-          {FINAL}/snps.imiss > {output.removes}
+          {params.final_dir}/snps.imiss > {output.removes}
         [ -s {output.removes} ] || : > {output.removes}
         nr=$(wc -l < {output.removes})
 
@@ -135,12 +120,14 @@ rule final_filter_indels:
         removes = temp(f"{FINAL}/indels.remove_samples.txt"),
         vcf = f"{FINAL}/filtered_indels.final.vcf.gz",
         tbi = f"{FINAL}/filtered_indels.final.vcf.gz.tbi"
-    conda: f"{ENVS}/vcfops.yaml"
+    conda: str(ENVS / "vcfops.yaml")
     threads: 4
     log: f"{LOGS}/final/indels.log"
     params:
+        final_dir=lambda w, output: str(Path(output[0]).parent),
+        logs_dir=lambda w: LOGS,
         do_ad = "true" if config.get("ad_filter", {}).get("enabled", True) else "false",
-        ad_expr = _ad_expr(),
+        ad_expr = ad_expr(config),
         split_bi = "true" if config.get("ad_filter", {}).get("split_multiallelic", True) else "false",
         drop_hets = "true" if config.get("ad_filter", {}).get("drop_hets", True) else "false",
         sample_max_missing = float(config.get("final", {}).get("sample_max_missing", 0.2)),
@@ -148,7 +135,7 @@ rule final_filter_indels:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {FINAL} {LOGS}/final
+        mkdir -p {params.final_dir} {params.logs_dir}/final
         export BCFTOOLS_PLUGINS="$(dirname $(dirname $(which bcftools)))/libexec/bcftools"
 
         # Step 1: keep PASS and .
@@ -175,32 +162,26 @@ rule final_filter_indels:
         fi
 
         if [ "{params.do_ad}" = "true" ]; then
-          if ! bcftools +setGT "$SRC1" -Oz -o {output.advcf} -- -n . -i '{params.ad_expr}' 2>> {log}; then
-            echo "[WARN] +setGT (AD mask) failed; skipping AD-clean." >> {log}
-            cp "$SRC1" {output.advcf}
-          fi
+          bcftools +setGT "$SRC1" -Oz -o {output.advcf} -- -t q -n . -i '{params.ad_expr}' 2>> {log}
         else
           cp "$SRC1" {output.advcf}
         fi
 
         # Optionally drop all heterozygous GTs
         if [ "{params.drop_hets}" = "true" ]; then
-          if ! bcftools +setGT {output.advcf} -Oz -o {output.advcf}.tmp -- -n . -i 'GT="het"' 2>> {log}; then
-            echo "[WARN] +setGT (drop hets) failed; keeping previous genotypes." >> {log}
-          else
-            mv {output.advcf}.tmp {output.advcf}
-          fi
+          bcftools +setGT {output.advcf} -Oz -o {output.advcf}.tmp -- -t q -n . -i 'GT="het"' 2>> {log}
+          mv {output.advcf}.tmp {output.advcf}
         fi
 
         tabix -p vcf {output.advcf} 2>> {log}
         SRC="{output.advcf}"
 
         # Step 3: remove samples with > sample_max_missing missingness
-        bcftools query -l "$SRC" > {FINAL}/indels.samples.list 2>> {log}
-        ns=$(wc -l < {FINAL}/indels.samples.list)
-        vcftools --gzvcf "$SRC" --missing-indv --out {FINAL}/indels 2>> {log}
+        bcftools query -l "$SRC" > {params.final_dir}/indels.samples.list 2>> {log}
+        ns=$(wc -l < {params.final_dir}/indels.samples.list)
+        vcftools --gzvcf "$SRC" --missing-indv --out {params.final_dir}/indels 2>> {log}
         LC_NUMERIC=C awk -v thr="{params.sample_max_missing}" 'NR>1 && $5>thr {{print $1}}' \
-          {FINAL}/indels.imiss > {output.removes}
+          {params.final_dir}/indels.imiss > {output.removes}
         [ -s {output.removes} ] || : > {output.removes}
         nr=$(wc -l < {output.removes})
 
