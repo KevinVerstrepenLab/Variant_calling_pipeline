@@ -1,18 +1,25 @@
-# Public release allowlist. Local datasets, tests and runtime files stay local.
+# Public release allowlist. Keep private datasets, local configs and runtime files local.
 /*
 !/.gitignore
 !/README.md
+!/CHANGELOG.md
+!/RELEASE_CHECKLIST.md
+!/STRUCTURAL_REVIEW.md
+!/VERSION
 !/VariantCalling2026.png
 !/LICENSE
 !/LICENSE.*
+
 !/config/
 /config/*
 !/config/config.yaml
 !/config/samples_examples.tsv
+
 !/workflow/
 /workflow/*
 !/workflow/Snakefile
 !/workflow/common.py
+!/workflow/configuration.py
 !/workflow/envs/
 /workflow/envs/*
 !/workflow/envs/bwa_samtools.yaml
@@ -20,25 +27,61 @@
 !/workflow/envs/gatk.yaml
 !/workflow/envs/htslib.yaml
 !/workflow/envs/vcfops.yaml
+!/workflow/envs/postprocessing.yaml
+!/workflow/envs/coverage.yaml
 !/workflow/rules/
 /workflow/rules/*
 !/workflow/rules/*.smk
 !/workflow/scripts/
 /workflow/scripts/*
 !/workflow/scripts/*.py
+!/workflow/scripts/*.R
+
 !/docs/
 /docs/*
 !/docs/gvcf_reuse.md
 !/docs/filter_validation.md
+!/docs/postprocessing.md
+!/docs/coverage_plots.md
+!/docs/RELEASE_NOTES_v1.0.0.md
+!/docs/UPDATE_v1.0.0.md
+
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/snakemake-ci.yml
+
+# Artificial fixtures and regression checks required by CI are public.
+!/tests/
+/tests/*
+!/tests/test_*.py
+!/tests/structural_check.py
+!/tests/minimal/
+/tests/minimal/*
+!/tests/minimal/config.yaml
+!/tests/minimal/reference.fa
+!/tests/minimal/samples.tsv
+!/tests/minimal/reads/
+/tests/minimal/reads/*
+!/tests/minimal/reads/paired_R1.fastq.gz
+!/tests/minimal/reads/paired_R2.fastq.gz
+!/tests/minimal/reads/single.fastq.gz
+
 **/__pycache__/
 *.pyc
 *_old*
 *.log
 
-# Explicit local-only directories.
-/tests/
+# Local-only: dataset configs/sheets, results, standalone imports, diagram drafts,
+# image-generation prompts, release archives, caches and environment directories.
 /.snakemake/
+/.pytest_cache/
+/.release-staging/
+/releases/
 /logs/
 /tmp/
 /data/
 /results/
+/CoveragePlots/
+/postprocessing_results/

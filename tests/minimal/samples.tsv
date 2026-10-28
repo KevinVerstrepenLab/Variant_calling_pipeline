@@ -1,0 +1,3 @@
+sample	layout	R1	R2
+paired	paired	tests/minimal/reads/paired_R1.fastq.gz	tests/minimal/reads/paired_R2.fastq.gz
+single	single	tests/minimal/reads/single.fastq.gz

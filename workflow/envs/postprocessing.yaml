@@ -1,0 +1,19 @@
+name: variant_postprocessing
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python >=3.9
+  - pyyaml
+  - bcftools
+  - vcftools
+  - plink=1.90b6.21
+  - plink2
+  - r-base=4.3
+  - r-optparse
+  - r-ape
+  - r-ggplot2
+  - r-dplyr
+  - r-ggrepel
+  - bioconductor-lea
+  - bioconductor-ggtree

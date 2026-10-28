@@ -1,0 +1,44 @@
+name: Snakemake CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: snakemake-ci
+          create-args: >-
+            snakemake-minimal>=8,<10
+            python=3.12
+            numpy
+            matplotlib-base
+            bcftools=1.20
+            vcftools=0.1.16
+            samtools=1.20
+            mosdepth>=0.3.3
+            gatk4=4.6.2.0
+            openjdk=17
+            -c conda-forge
+            -c bioconda
+      - name: Structural checks
+        shell: bash -el {0}
+        run: python tests/structural_check.py
+      - name: Regression tests and synthetic BAM/VCF integration
+        shell: bash -el {0}
+        run: |
+          export VCFOPS_TEST_BIN="$CONDA_PREFIX/bin"
+          export COVERAGE_TEST_BIN="$CONDA_PREFIX/bin"
+          export GATK_TEST_BINARY="$CONDA_PREFIX/bin/gatk"
+          export MPLCONFIGDIR="$RUNNER_TEMP/matplotlib"
+          python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Lint
+        shell: bash -el {0}
+        run: snakemake --snakefile workflow/Snakefile --configfile tests/minimal/config.yaml --lint
+      - name: Dry run mixed PE and SE DAG
+        shell: bash -el {0}
+        run: snakemake --snakefile workflow/Snakefile --configfile tests/minimal/config.yaml --dry-run --cores 2

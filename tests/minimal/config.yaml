@@ -1,0 +1,12 @@
+ref: tests/minimal/reference.fa
+samples_tsv: tests/minimal/samples.tsv
+outdir: tests/minimal/results
+fastp_threads: 1
+bwa_threads: 1
+markdup_threads: 1
+call_bam_threads: 1
+hc_threads: 1
+joint:
+  chunk_size: null
+  reader_threads: 1
+  tmp_dir: tests/minimal/tmp

@@ -1,0 +1,8 @@
+name: coverage_plots
+channels: [conda-forge, bioconda]
+dependencies:
+  - python >=3.10
+  - mosdepth >=0.3.3
+  - samtools >=1.20
+  - numpy
+  - matplotlib-base

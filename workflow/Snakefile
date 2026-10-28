@@ -5,6 +5,7 @@ import json
 import re
 from common import sanitize, _load_contigs_from_dict, _load_contigs_from_fai, _scan_fasta_lengths, _expanduser
 from snakemake.exceptions import WorkflowError
+from configuration import normalize_config, postprocessing_settings, postprocessing_outputs, postprocessing_phase_settings
 
 # --- Repository-aware paths ---
 WORKFLOW = Path(workflow.basedir).resolve()
@@ -14,6 +15,12 @@ ENVS = WORKFLOW / "envs"
 # A command-line --configfile overrides this default.
 DEFAULT_CONFIG = ROOT / "config" / "config.yaml"
 configfile: str(DEFAULT_CONFIG)
+
+try:
+    config = normalize_config(config)
+    POSTPROCESSING = postprocessing_settings(config)
+except (ValueError, TypeError) as exc:
+    raise WorkflowError(str(exc)) from exc
 
 # --- Config values ---
 REF = str(Path(os.path.expanduser(config["ref"])).resolve())
@@ -212,10 +219,15 @@ include: "rules/genotype.smk"
 include: "rules/select_filter.smk"
 include: "rules/merge.smk"
 include: "rules/final.smk"
+include: "rules/postprocessing.smk"
+include: "rules/coverage.smk"
 
 rule all:
+    default_target: True
     input:
         [GVCF_INDEXES[sample] for sample in GVCF_SAMPLES],
         rules.gvcf_provenance.output.manifest,
         f"{FINAL}/filtered_snps.final.vcf.gz.tbi",
-        f"{FINAL}/filtered_indels.final.vcf.gz.tbi"
+        f"{FINAL}/filtered_indels.final.vcf.gz.tbi",
+        POSTPROCESSING_TARGETS,
+        COVERAGE_TARGETS

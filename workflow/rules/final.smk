@@ -40,15 +40,15 @@ rule final_filter_snps:
 
         # Step 1: keep PASS and unfiltered (.)
         bcftools view -f .,PASS {input.vcf} -Oz -o {output.passvcf} 2>> {log}
-        tabix -p vcf {output.passvcf} 2>> {log}
+        tabix -f -p vcf {output.passvcf} 2>> {log}
 
         # Short-circuit if empty after Step 1
-        if [ "$(bcftools view -H {output.passvcf} | head -n1 | wc -l)" -eq 0 ]; then
+        if [ "$(bcftools index --nrecords {output.passvcf:q})" -eq 0 ]; then
           echo "[INFO] No SNPs after Step 1; writing empty final VCF." >> {log}
           bcftools view -h {output.passvcf} -Oz -o {output.vcf} 2>> {log}
-          tabix -p vcf {output.vcf} 2>> {log}
-          cp {output.vcf} {output.advcf}; tabix -p vcf {output.advcf} 2>> {log} || true
-          cp {output.vcf} {output.step3vcf}; tabix -p vcf {output.step3vcf} 2>> {log} || true
+          tabix -f -p vcf {output.vcf} 2>> {log}
+          cp {output.vcf} {output.advcf}; tabix -f -p vcf {output.advcf} 2>> {log} || true
+          cp {output.vcf} {output.step3vcf}; tabix -f -p vcf {output.step3vcf} 2>> {log} || true
           : > {output.removes}
           exit 0
         fi
@@ -57,7 +57,7 @@ rule final_filter_snps:
         SRC1={output.passvcf}
         if [ "{params.split_bi}" = "true" ]; then
           bcftools norm -m -both "$SRC1" -Oz -o {output.passvcf}.biallelic.gz 2>> {log}
-          tabix -p vcf {output.passvcf}.biallelic.gz 2>> {log}
+          tabix -f -p vcf {output.passvcf}.biallelic.gz 2>> {log}
           SRC1={output.passvcf}.biallelic.gz
         fi
 
@@ -73,7 +73,7 @@ rule final_filter_snps:
           mv {output.advcf}.tmp {output.advcf}
         fi
 
-        tabix -p vcf {output.advcf} 2>> {log}
+        tabix -f -p vcf {output.advcf} 2>> {log}
         SRC="{output.advcf}"
 
         # Step 3: remove samples with > sample_max_missing missingness
@@ -88,13 +88,13 @@ rule final_filter_snps:
         if [ "$ns" -eq 0 ] || [ "$nr" -ge "$ns" ]; then
           echo "[WARN] Sample removal would drop all ($nr/$ns). Skipping removal." >> {log}
           cp "$SRC" {output.step3vcf}
-          tabix -p vcf {output.step3vcf} 2>> {log} || true
+          tabix -f -p vcf {output.step3vcf} 2>> {log} || true
         else
           vcftools --gzvcf "$SRC" \
                    --remove {output.removes} \
                    --recode --recode-INFO-all --stdout 2>> {log} \
             | bgzip -c > {output.step3vcf}
-          tabix -p vcf {output.step3vcf} 2>> {log}
+          tabix -f -p vcf {output.step3vcf} 2>> {log}
         fi
 
         # Step 4: per-site missingness
@@ -102,7 +102,7 @@ rule final_filter_snps:
                  --max-missing {params.site_max_missing} \
                  --recode --recode-INFO-all --stdout 2>> {log} \
           | bgzip -c > {output.vcf}
-        tabix -p vcf {output.vcf} 2>> {log}
+        tabix -f -p vcf {output.vcf} 2>> {log}
         """
 
 # ---------------- INDELs ----------------
@@ -140,15 +140,15 @@ rule final_filter_indels:
 
         # Step 1: keep PASS and .
         bcftools view -f .,PASS {input.vcf} -Oz -o {output.passvcf} 2>> {log}
-        tabix -p vcf {output.passvcf} 2>> {log}
+        tabix -f -p vcf {output.passvcf} 2>> {log}
 
         # Short-circuit if empty after Step 1
-        if [ "$(bcftools view -H {output.passvcf} | head -n1 | wc -l)" -eq 0 ]; then
+        if [ "$(bcftools index --nrecords {output.passvcf:q})" -eq 0 ]; then
           echo "[INFO] No INDELs after Step 1; writing empty final VCF." >> {log}
           bcftools view -h {output.passvcf} -Oz -o {output.vcf} 2>> {log}
-          tabix -p vcf {output.vcf} 2>> {log}
-          cp {output.vcf} {output.advcf}; tabix -p vcf {output.advcf} 2>> {log} || true
-          cp {output.vcf} {output.step3vcf}; tabix -p vcf {output.step3vcf} 2>> {log} || true
+          tabix -f -p vcf {output.vcf} 2>> {log}
+          cp {output.vcf} {output.advcf}; tabix -f -p vcf {output.advcf} 2>> {log} || true
+          cp {output.vcf} {output.step3vcf}; tabix -f -p vcf {output.step3vcf} 2>> {log} || true
           : > {output.removes}
           exit 0
         fi
@@ -157,7 +157,7 @@ rule final_filter_indels:
         SRC1={output.passvcf}
         if [ "{params.split_bi}" = "true" ]; then
           bcftools norm -m -both "$SRC1" -Oz -o {output.passvcf}.biallelic.gz 2>> {log}
-          tabix -p vcf {output.passvcf}.biallelic.gz 2>> {log}
+          tabix -f -p vcf {output.passvcf}.biallelic.gz 2>> {log}
           SRC1={output.passvcf}.biallelic.gz
         fi
 
@@ -173,7 +173,7 @@ rule final_filter_indels:
           mv {output.advcf}.tmp {output.advcf}
         fi
 
-        tabix -p vcf {output.advcf} 2>> {log}
+        tabix -f -p vcf {output.advcf} 2>> {log}
         SRC="{output.advcf}"
 
         # Step 3: remove samples with > sample_max_missing missingness
@@ -188,13 +188,13 @@ rule final_filter_indels:
         if [ "$ns" -eq 0 ] || [ "$nr" -ge "$ns" ]; then
           echo "[WARN] Sample removal would drop all ($nr/$ns). Skipping removal." >> {log}
           cp "$SRC" {output.step3vcf}
-          tabix -p vcf {output.step3vcf} 2>> {log} || true
+          tabix -f -p vcf {output.step3vcf} 2>> {log} || true
         else
           vcftools --gzvcf "$SRC" \
                    --remove {output.removes} \
                    --recode --recode-INFO-all --stdout 2>> {log} \
             | bgzip -c > {output.step3vcf}
-          tabix -p vcf {output.step3vcf} 2>> {log}
+          tabix -f -p vcf {output.step3vcf} 2>> {log}
         fi
 
         # Step 4: per-site missingness
@@ -202,5 +202,5 @@ rule final_filter_indels:
                  --max-missing {params.site_max_missing} \
                  --recode --recode-INFO-all --stdout 2>> {log} \
           | bgzip -c > {output.vcf}
-        tabix -p vcf {output.vcf} 2>> {log}
+        tabix -f -p vcf {output.vcf} 2>> {log}
         """
