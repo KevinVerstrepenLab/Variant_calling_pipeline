@@ -186,3 +186,9 @@ snakemake --snakefile workflow/Snakefile \
 Tests requiring external tools skip when those tools are unavailable. The [release review](STRUCTURAL_REVIEW.md) records the checks actually run and their limits. Synthetic integration tests cover filtering, BAM coverage, PCA/tree and LEA preparation/model/plotting; a complete fresh-FASTQ biological validation is not claimed.
 
 Release files include production workflow code, the portable config/sample-sheet template, documentation, the current diagram, CI and artificial tests. Private configs/sheets, real data/results, Conda caches, archived diagrams and generation prompts stay local. Publication readiness is tracked in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+
+## Maintainer
+
+Verstrepen Lab — KU Leuven\
+[https://verstrepenlab.sites.vib.be/en](https://verstrepenlab.sites.vib.be/en)\
+Contact: [michael.abrouk@kuleuven.be](mailto:michael.abrouk@kuleuven.be)
