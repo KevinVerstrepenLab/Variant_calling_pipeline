@@ -193,7 +193,11 @@ GVCF_INDEXES = {
 }
 PROVENANCE = f"{OUT}/provenance/gvcf"
 PREVIOUS_GVCF_METADATA = {}
-for sample in REUSED_SAMPLES:
+# Keep this parameter deterministic across Python processes. Iterating the set
+# directly can change dictionary insertion order and make Snakemake report a
+# false params change, which unnecessarily invalidates the sample map and all
+# GenomicsDB intervals.
+for sample in sorted(REUSED_SAMPLES):
     candidates = [Path(f"{PROVENANCE}/{sample}.meta.json"),
                   Path(f"{existing_gvcfs[sample]}.meta.json")]
     metadata_path = next((path for path in candidates if path.is_file()), None)

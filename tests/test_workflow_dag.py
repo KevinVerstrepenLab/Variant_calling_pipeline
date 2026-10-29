@@ -12,6 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SNAKEMAKE = os.environ.get('SNAKEMAKE_BINARY') or shutil.which('snakemake')
 
 
+class WorkflowSourceTests(unittest.TestCase):
+    def test_reused_metadata_parameter_order_is_deterministic(self):
+        source = (ROOT / 'workflow/Snakefile').read_text()
+        metadata_block = source.split('PREVIOUS_GVCF_METADATA = {}', 1)[1].split('include:', 1)[0]
+        self.assertIn('for sample in sorted(REUSED_SAMPLES):', metadata_block)
+
+
 @unittest.skipUnless(SNAKEMAKE, 'Snakemake executable required')
 class DagTests(unittest.TestCase):
     def setUp(self):
