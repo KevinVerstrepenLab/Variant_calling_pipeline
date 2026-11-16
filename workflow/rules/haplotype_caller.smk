@@ -12,6 +12,7 @@ rule haplotype_caller_gvcf:
     conda: str(ENVS / "gatk.yaml")
     threads: config.get("hc_threads", 1)
     resources:
+        java_jobs=1,
         mem_mb=config.get("hc_mem_mb", 16000)
     log:
         f"{LOGS}/haplotypecaller/{{sample}}.log"

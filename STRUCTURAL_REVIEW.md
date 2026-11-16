@@ -1,4 +1,28 @@
-# v1.0.0 pipeline and release review
+# v1.0.1 pipeline and release review
+
+Review date: 16 November 2026. Version: `1.0.1`.
+
+## Current changes and validation
+
+- Duplicate marking stages the BAM, metrics and indexes; checks and indexes the staged BAM before publication; and cleans failed staging directories. Seven regression cases exercise success, optional Spark indexes, retries with existing Spark partitions, tool/index/validation failures and missing metrics.
+- HaplotypeCaller publishes a nonempty GVCF and index after successful execution. Reused metadata ordering is deterministic, avoiding false cohort invalidation.
+- Every GATK rule requests one `java_jobs` slot. The README shows explicit concurrency limits, explains CPU/RAM constraints, and documents optional per-job memory and import-thread overrides. Without a global slot budget, the existing CPU/RAM scheduling behavior remains in place.
+- Coverage plot annotations and legends have improved placement.
+- A release workflow runs reusable CI before creating a release from a `VERSION` change on `main`; archives contain only the committed source, with a source manifest and SHA-256 checksums.
+
+The 16 November review exercised **55 distinct regression cases successfully across two installed environments**: 53 passed in the main runner and both environment-dependent genotype-masking cases passed separately in the Snakemake environment. Tests include real-tool final/hard filtering, BAM-to-coverage figures, PCA/tree/LEA execution and preparation/model reuse. Structural checks, Snakemake 9.5.1 lint, Python syntax, local Markdown links and a clean-source mixed-layout 29-job dry-run passed.
+
+A deterministic synthetic run with 100 paired read pairs and 100 single-end reads on a 5 kb random reference completed the production workflow from trimming through final SNP/INDEL VCFs. Actual duplicate-marked BAMs contained 200 paired and 100 single-end mapped records; HaplotypeCaller emitted indexed GVCFs for both samples. No variants were intentionally introduced. Spark required local socket access outside the review sandbox, with loopback host/IP settings; production settings were unchanged.
+
+A large biological GVCF-reuse cohort completed final calling/filtering and PCA/tree analysis on 13 November. Final indexes, retained-sample consistency, reference/cohort manifests and expected coverage outputs were checked. A matching `--use-conda` dry-run scheduled no further work. This is distinct from the earlier, stopped biological run recorded below. LEA was validated with synthetic data rather than this cohort.
+
+Full original GVCF/final-VCF rehashing, fresh Conda environment solves, biological sensitivity/specificity and measured concurrency speedups are not claimed. Some reused indexing outputs lack historical Snakemake scheduler metadata; the separate validated cohort manifest is present. Public source excludes biological results and identifiers. No distribution license was selected.
+
+Hosted checks for the exact release commit run before the automated publication job. The October review below is retained as historical evidence.
+
+---
+
+# Historical v1.0.0 pipeline and release review
 
 Review date: 28 October 2026. Version: `1.0.0`. Scope: production rules, shared helpers, Python/R scripts, environment declarations, public configuration, test fixtures, documentation and the release allowlist.
 

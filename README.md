@@ -1,10 +1,10 @@
-# Variant Calling Pipeline — v1.0.0
+# Variant Calling Pipeline — v1.0.1
 
 A Snakemake workflow for variant calling, incremental cohort reuse, and optional population and coverage analyses. It accepts paired-end, single-end, or mixed read libraries. Existing per-sample GVCFs are validated and reused; only samples without a reusable GVCF need alignment and calling.
 
 ![Variant calling, GVCF reuse, independent coverage screening, and optional PCA, phylogenetic trees and LEA structure analysis](VariantCalling2026.png)
 
-[Release notes](docs/RELEASE_NOTES_v1.0.0.md) · [Short update for colleagues](docs/UPDATE_v1.0.0.md) · [Changelog](CHANGELOG.md)
+[Release notes](docs/RELEASE_NOTES_v1.0.1.md) · [Changelog](CHANGELOG.md)
 
 ## Configure one run
 
@@ -71,6 +71,36 @@ snakemake --snakefile workflow/Snakefile \
 ```
 
 Conda environments are under `workflow/envs/`. Set `resources` to suit your machine. `mem_mb` is a scheduling budget; GATK Java heaps and PLINK limits are configured within those budgets. Use `--rerun-incomplete` after an interrupted job. Changes in code, parameters, inputs or environments can legitimately schedule downstream recomputation.
+
+### Control the number of concurrent Java jobs
+
+Each GATK job requests one `java_jobs` slot. Set the total with `--resources java_jobs=N`; Snakemake also respects the CPU and memory budgets. For example, on a machine with 32 available cores and **128,000 MB available to the workflow**, allow up to eight Java jobs at once:
+
+```bash
+snakemake --snakefile workflow/Snakefile \
+  --configfile config/config.yaml --use-conda \
+  --cores 32 --resources mem_mb=128000 java_jobs=8 \
+  --printshellcmds --latency-wait 30 --rerun-incomplete
+```
+
+Choose budgets after reserving RAM and CPU capacity for the operating system and other workloads. `java_jobs` limits simultaneous GATK processes, including indexing, duplicate marking, calling, joint genotyping and variant filtering. It does not set the number of JVM threads. If omitted, CPU and memory budgets alone control concurrency. Increasing the slot limit helps only when independent jobs and enough CPU/RAM are available.
+
+The default HaplotypeCaller, GenomicsDBImport and GenotypeGVCFs budgets are 16,000 MB per job. A 32,000 MB workflow budget therefore allows at most two such jobs; 128,000 MB allows at most eight. Import jobs also request four reader threads by default.
+
+If measured memory use for your cohort supports smaller heaps, this example allows up to 16 Java jobs by reducing those three per-job budgets to 8,000 MB and import reader threads to two:
+
+```bash
+snakemake --snakefile workflow/Snakefile \
+  --configfile config/config.yaml --use-conda \
+  --cores 32 --resources mem_mb=128000 java_jobs=16 \
+  --set-resources haplotype_caller_gvcf:mem_mb=8000 \
+                  genomicsdbimport:mem_mb=8000 \
+                  genotype_gvcfs:mem_mb=8000 \
+  --set-threads genomicsdbimport=2 \
+  --printshellcmds --latency-wait 30 --rerun-incomplete
+```
+
+These overrides also reduce the corresponding Java maximum heaps to about 6 GiB. Use the 16,000 MB defaults when the cohort needs more memory; the 16-job example is a tuning option, not a measured speedup. Lower reader threads can reduce the speed of each individual import. Add `--dry-run --printshellcmds` to inspect the effective resource requests and Java options before running. Overrides affect the launch command without editing the YAML configuration.
 
 ## Variant calling and cohort reuse
 

@@ -44,6 +44,7 @@
 !/docs/postprocessing.md
 !/docs/coverage_plots.md
 !/docs/RELEASE_NOTES_v1.0.0.md
+!/docs/RELEASE_NOTES_v1.0.1.md
 !/docs/UPDATE_v1.0.0.md
 
 !/.github/
@@ -51,6 +52,7 @@
 !/.github/workflows/
 /.github/workflows/*
 !/.github/workflows/snakemake-ci.yml
+!/.github/workflows/publish-release.yml
 
 # Artificial fixtures and regression checks required by CI are public.
 !/tests/

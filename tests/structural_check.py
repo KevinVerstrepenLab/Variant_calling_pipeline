@@ -20,6 +20,7 @@ required = [
     "workflow/rules/postprocessing.smk",
     "workflow/rules/coverage.smk",
     "docs/RELEASE_NOTES_v1.0.0.md",
+    "docs/RELEASE_NOTES_v1.0.1.md",
     "docs/UPDATE_v1.0.0.md",
     "CHANGELOG.md",
     "RELEASE_CHECKLIST.md",
@@ -30,6 +31,7 @@ required = [
     "workflow/scripts/validate_gvcf_provenance.py",
     "docs/gvcf_reuse.md",
     ".github/workflows/snakemake-ci.yml",
+    ".github/workflows/publish-release.yml",
 ]
 for relative in required:
     if not (ROOT / relative).is_file():

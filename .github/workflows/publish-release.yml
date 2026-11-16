@@ -1,0 +1,64 @@
+name: Publish release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/snakemake-ci.yml
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release version and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '\r\n' < VERSION)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="v$version"
+          test -s "docs/RELEASE_NOTES_$tag.md"
+          printf 'RELEASE_TAG=%s\n' "$tag" >> "$GITHUB_ENV"
+      - name: Package the validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/release-assets"
+          mkdir -p "$assets"
+          name="Variant_calling-$RELEASE_TAG"
+          git archive --format=tar.gz --prefix="$name/" HEAD > "$assets/$name.tar.gz"
+          git archive --format=zip --prefix="$name/" HEAD > "$assets/$name.zip"
+          git ls-tree -r --name-only HEAD > "$assets/SOURCE_MANIFEST.txt"
+          cp "docs/RELEASE_NOTES_$RELEASE_TAG.md" "$assets/"
+          cd "$assets"
+          sha256sum "$name.tar.gz" "$name.zip" SOURCE_MANIFEST.txt \
+            "RELEASE_NOTES_$RELEASE_TAG.md" > SHA256SUMS
+      - name: Publish GitHub release and source assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; bump VERSION for a new release." >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Variant Calling Pipeline $RELEASE_TAG" \
+            --notes-file "docs/RELEASE_NOTES_$RELEASE_TAG.md" --latest \
+            "$RUNNER_TEMP/release-assets/"*

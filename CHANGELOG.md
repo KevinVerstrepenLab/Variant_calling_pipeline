@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.1 — 2026-11-16
+
+### Added
+
+- An optional global `java_jobs` resource for all GATK rules, with README commands to control concurrency and tune per-job memory/import reader threads.
+- GitHub release publication on version changes to `main`, gated by the regression suite, lint and dry-run checks, with source archives and SHA-256 checksums.
+- Duplicate-marking failure/retry regression tests and updated validation evidence from a completed GVCF-reuse cohort and a fresh synthetic mixed-layout run.
+
+### Fixed
+
+- Stage duplicate-marked BAMs, metrics and indexes; validate and index before publishing the BAM, clean staging after failures, and avoid stale Spark partitions on retries.
+- Stage HaplotypeCaller GVCFs and require nonempty calls and indexes before publication; honor the configured temporary directory.
+- Keep reused GVCF metadata ordering deterministic to avoid unnecessary cohort rebuilds.
+- Move coverage overflow annotations and the legend to improve figure readability.
+
 ## v1.0.0 — 2026-10-28
 
 ### Added

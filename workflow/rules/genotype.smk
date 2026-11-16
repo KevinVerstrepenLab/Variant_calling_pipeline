@@ -10,6 +10,7 @@ rule genotype_gvcfs:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=config.get("genotype_mem_mb", config.get("hc_mem_mb", 16000))
     log:
         f"{LOGS}/genotype/{{chunk}}.log"

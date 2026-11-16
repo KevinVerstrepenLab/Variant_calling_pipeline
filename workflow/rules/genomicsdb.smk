@@ -6,6 +6,7 @@ rule genomicsdbimport:
     conda: str(ENVS / "gatk.yaml")
     threads: config.get("joint", {}).get("reader_threads", 4)
     resources:
+        java_jobs=1,
         mem_mb=config.get("genomicsdb_mem_mb", 16000)
     log:
         f"{LOGS}/genomicsdb/{{chunk}}.log"

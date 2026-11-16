@@ -25,6 +25,7 @@ rule index_legacy_gvcf:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=2000
     log:
         f"{LOGS}/legacy_index/{{stem}}.log"

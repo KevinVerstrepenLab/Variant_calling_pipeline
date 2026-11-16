@@ -9,6 +9,7 @@ rule select_snps:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=config.get("select_mem_mb", 4000)
     log:
         f"{LOGS}/select_snps/{{chunk}}.log"
@@ -35,6 +36,7 @@ rule filter_snps:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=config.get("filter_mem_mb", 4000)
     log:
         f"{LOGS}/filter_snps/{{chunk}}.log"
@@ -62,6 +64,7 @@ rule select_indels:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=config.get("select_mem_mb", 4000)
     log:
         f"{LOGS}/select_indels/{{chunk}}.log"
@@ -88,6 +91,7 @@ rule filter_indels:
     conda: str(ENVS / "gatk.yaml")
     threads: 1
     resources:
+        java_jobs=1,
         mem_mb=config.get("filter_mem_mb", 4000)
     log:
         f"{LOGS}/filter_indels/{{chunk}}.log"

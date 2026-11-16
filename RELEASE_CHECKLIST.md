@@ -1,21 +1,21 @@
-# v1.0.0 release checklist
+# v1.0.1 release checklist
 
-## Local release preparation
+## Preparation and validation
 
-- [x] Version chosen: `v1.0.0`; recorded in `VERSION`.
-- [x] Public allowlist includes production code, docs, current figure, CI and synthetic fixtures.
-- [x] Private configs/sheets, real data/results, Conda caches, draft figures and prompt logs stay local.
-- [x] README, changelog, migration/method guides, release notes and colleague update prepared.
-- [x] Final source/package checks and clean-package regression tests recorded in `STRUCTURAL_REVIEW.md`.
-- [x] Local release commit, annotated tag, source archives and SHA-256 checksums prepared.
+- [x] Use a new patch version, `v1.0.1`, preserving the existing `v1.0.0` tag.
+- [x] Include the reviewed HaplotypeCaller, duplicate-marking and coverage-display fixes and regression coverage.
+- [x] Document Java job concurrency, CPU/memory budgets and optional per-job tuning in the README.
+- [x] Preserve the public allowlist; private configurations, datasets, logs, caches and archived diagrams stay local.
+- [x] Record current validation in `STRUCTURAL_REVIEW.md` and the release notes.
+- [x] Retain the established maintainer and contact in the README.
+- [x] Publication authorized by the maintainer on 16 November 2026.
 
-## Before remote publication
+## Publication workflow
 
-- [ ] Review the release diff and intended remote visibility.
-- [ ] Select a distribution license with the repository owner/institution; no license has been selected automatically.
-- [ ] Confirm maintainer/contact and citation details.
-- [ ] Confirm hosted CI passes after pushing the release branch/tag.
-- [ ] Complete representative biological validation, including a fresh-read run where applicable. The stopped cohort test is not a completed end-to-end run.
-- [ ] Push the release commit/tag and publish the release notes/assets when authorized.
+A `VERSION` change pushed to `main` starts `.github/workflows/publish-release.yml`. It runs the reusable Snakemake CI workflow, then builds source archives from the checked-out commit and publishes the versioned GitHub release with a source manifest and SHA-256 checksums. Manual reruns are available through `workflow_dispatch`; an existing release is not overwritten.
 
-Preparation does not push or publish remotely. Existing local data and archived figures are retained.
+Check the hosted workflow result and the release assets after publication. Source archives must correspond to the release tag and include the README and tests for that version.
+
+## Distribution metadata
+
+No distribution license has been selected or added. Citation details can be added by the maintainer later; they do not change the validation results recorded here.

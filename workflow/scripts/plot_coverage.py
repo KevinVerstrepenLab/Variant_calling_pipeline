@@ -251,12 +251,13 @@ def draw_plot(prefix, sample, rows, depth, raw_log2, log2, smoothed, qc, setting
         for ax, count in ((top, sum(depth_overflow.values())),
                           (bottom, sum(raw_overflow.values())+sum(norm_overflow.values()))):
             if count:
-                ax.text(0.01, 0.97, f'{count} points outside range (triangles)', transform=ax.transAxes,
-                        va='top', fontsize=8, bbox={'facecolor': 'white', 'alpha': 0.8, 'edgecolor': 'none'})
+                ax.text(0.01, 0.03, f'{count} points outside range (triangles)', transform=ax.transAxes,
+                        va='bottom', fontsize=8, bbox={'facecolor': 'white', 'alpha': 0.8, 'edgecolor': 'none'})
         bottom.set_ylabel('log2 coverage / sample baseline')
         bottom.set_xticks(centers, labels, rotation=60, ha='right')
         bottom.set_xlabel('Reference contigs in genome order')
-        bottom.legend(loc='upper right', fontsize=8)
+        # Keep the legend above the axis floor so low-coverage points remain visible.
+        bottom.legend(loc='lower right', bbox_to_anchor=(1, 0.08), fontsize=8)
         plot_qc['rows'].append({'contigs': labels, 'depth_outside_range': depth_overflow,
                                 'raw_log2_outside_range': raw_overflow, 'normalized_outside_range': norm_overflow})
     status = 'LOW DEPTH' if qc['low_depth'] else 'relative coverage screen'
